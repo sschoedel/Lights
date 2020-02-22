@@ -7,6 +7,7 @@
 #define NUM_LEDS NUM_LEDS_PER_STRIP * NUM_STRIPS
 #define AVG_AUX_VALS 50
 #define MIDDLE NUM_LEDS/2
+#define FRAMES_PER_SECOND  120
 
 int brightness = 85;
 int aux = A0;
@@ -24,6 +25,16 @@ int brigntess = 5;
 bool rainbowGoing = false;
 int rainbowCounter = (NUM_LEDS)-1;
 static float hue = 86;
+float gHue = 0; // rotating "base color" used by many of the patterns
+int prevBright;
+int newBright;
+bool add;
+float brightDecay = 3;
+
+int sensor0 = A2;
+int sensor0Avg = 0;
+const int sensorAvgNum = 100;
+int flatten0[sensorAvgNum+1] = {};
 
 // Define the array of leds
 CRGB leds[NUM_LEDS];
@@ -31,24 +42,57 @@ CRGB leds[NUM_LEDS];
 void setup() { 
 	Serial.begin(57600);
 	Serial.println("resetting");
-  FastLED.addLeds<WS2811, 2>(leds, 0, NUM_LEDS_PER_STRIP);
-  FastLED.addLeds<WS2811, 12>(leds, NUM_LEDS_PER_STRIP, NUM_LEDS_PER_STRIP);
+  FastLED.addLeds<WS2811, 2>(leds, 0, NUM_LEDS);
+  FastLED.addLeds<WS2811, 12>(leds, 0, NUM_LEDS);
   pinMode(aux, INPUT);
-	LEDS.setBrightness(brightness);
+  LEDS.setBrightness(brightness);
+  pinMode(sensor0, INPUT);
 }
 
 void fadeall() { for(int i = 0; i < NUM_LEDS; i++) { leds[i].nscale8(250); } }
 
 void loop() {
-  int START_LEDS = 0;
-  int END_LEDS = 0;
-  hue = hue + 0.1;
-  if(hue >= 255){
-    hue = 0;
+  int minDelta = 30;
+  int pinValue = analogRead(sensor0);
+  newBright = pinValue;
+  if (newBright > prevBright)
+  {
+    add = true;
   }
+  else
+  {
+    add = false;
+  }
+
+  if (add)
+  {
+    brightness += newBright;
+  }
+  else
+  {
+    brightness -= brightDecay;
+  }
+  Serial.println(brightness);
+  Serial.println(pinValue);
+  
+  int brightMin = 40;
+  if (brightness > 255){
+    brightness = 255;
+  }
+  else if (brightness < brightMin)
+  {
+    brightness = brightMin;
+  }
+  
+  LEDS.setBrightness(brightness);
+  
+  gHue = gHue + .3;
+  if(gHue >= 255){
+    gHue = 0;
+  }
+//  EVERY_N_MILLISECONDS( 20 ) { gHue++; } 
   //brightness = readSignal();
-  brightness = 100;
-  fromMiddle(brightness, hue, 1000);
+//  fromMiddle(brightness, hue, 1000);
   //LEDSout(brightness, hue);
   //delay(1000);
   //LEDSin(brightness);
@@ -57,45 +101,22 @@ void loop() {
   /*Serial.print("avg intensity: ");Serial.println(brightness);
   //fromMiddle(brightness, hue);
   //rainbowBOP(brightness, START_LEDS, END_LEDS); // see if rainbow should appear and if it should update it
-  /*for(int i = 0; i < START_LEDS; i++){
-    leds[i] = CHSV(hue,255,255);
+  */
+  for(int i = 0; i < NUM_LEDS; i++){
+    leds[i] = CHSV(gHue,255,255);
   }
-  for(int i = END_LEDS; i < NUM_LEDS; i++){
-    leds[i] = CHSV(hue,255,255);
-  }*/
   FastLED.show();
-  /*
-  if(brightness >= 254){
-    brightness++;
-  } else if (brightness == 1){
-    brightness--;
-  }
-  delay(10);*/
-  /*
-  LEDS.setBrightness(brightness);
-   FastLED.show(); // Show the leds
-	for(int i = 0; i < NUM_LEDS; i++) {
-		leds[i] = CHSV(255, 255, 255);
-    
-		
-		FastLED.show(); // Show the leds
-		fadeall();
-		delay(10);
-	}
+//  FastLED.delay(1000/FRAMES_PER_SECOND);
+  prevBright = brightness;
 
-	// Now go in the other direction.  
-	for(int i = (NUM_LEDS)-1; i >= 0; i--) {
-		leds[i] = CHSV(hue++, 255, 255);
-		
-    brightness = readSignal();
-    LEDS.setBrightness(brightness);
-    Serial.print("avg intensity: ");Serial.println(brightness);
-    
-		FastLED.show(); // Show the leds
-		fadeall();
-		delay(10);
-	}*/
+
 }
+void rainbow() 
+{
+  // FastLED's built-in rainbow generator
+  fill_rainbow( leds, NUM_LEDS, gHue, 7);
+}
+
 
 void fromMiddle(int brightness, float hue, float timeOut){
   int outer = brightness/2;
